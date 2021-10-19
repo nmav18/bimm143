@@ -1,2 +1,2 @@
 # bimm143
-bioinformatics
+bioinformatics class at UCSD Fall 2021
