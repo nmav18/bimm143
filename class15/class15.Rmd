@@ -1,0 +1,176 @@
+---
+title: "Class 15"
+author: 'Natalie Avina (PID: A15590695)'
+date: "11/16/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+countData and colData
+```{r setup, include=FALSE}
+counts <- read.csv("airway_scaledcounts.csv", stringsAsFactors = FALSE, row.names=1)
+metadata <-  read.csv("airway_metadata.csv", stringsAsFactors = FALSE)
+```
+
+```{r}
+head(counts)
+```
+
+```{r}
+head(metadata)
+```
+
+> How many genes are in this dataset?
+
+```{r}
+nrow(counts)
+```
+
+>How many control cell lines do we have?
+
+```{r}
+sum(metadata$dex=="control")
+```
+
+First I need to extrat all the control columns. Then I will take the rowwise mean to get the average count values for all genes in these four experiments.
+
+```{r}
+control.inds <- metadata$dex == "control"
+control.counts <- counts[,control.inds]
+head(control.counts)
+```
+
+```{r}
+control.mean <- rowMeans(control.counts)
+```
+
+
+Do the same thing for "treated".
+```{r}
+treated.inds <- metadata$dex == "treated"
+treated.counts <- counts[,treated.inds]
+head(treated.counts)
+```
+
+```{r}
+treated.mean <- rowMeans(treated.counts)
+```
+
+We are cominbining the data from both means into a dataframe.
+```{r}
+meancounts <- data.frame(control.mean, treated.mean)
+```
+
+
+Plot control vs treated
+```{r}
+library(ggplot2)
+ggplot(meancounts, aes(x = control.mean, y = treated.mean)) + geom_point() + scale_x_log10() + scale_y_log10()
+```
+```{r}
+log2(10/10)
+```
+
+```{r}
+log2(40/10)
+```
+
+```{r}
+log2(5/10)
+```
+
+
+We see 0 values for no change, positive vales for increased expression, and negative values for decreased expression. **log2(fold-change)** is used a lot in genomics/proteomics.
+
+```{r}
+meancounts$log2fc <- log2(meancounts[,"treated.mean"]/meancounts[,"control.mean"])
+head(meancounts)
+```
+
+We have to get rid of the genes (rows) with 0.00 counts because we can't say anything about these; they have no data.
+```{r}
+head(meancounts[,1:2]==0)
+```
+
+```{r}
+which(c(F,F,T,T))
+```
+
+We can use the **which()** function with 'arr.ind=TRU' argument to get the columns and rows where the TRUE (zero counts) values are.
+```{r}
+zero.vals <- which(meancounts[,1:2] == 0, arr.ind = TRUE)
+head(zero.vals)
+```
+
+```{r}
+to.rm <- unique(zero.vals[,"row"])
+head(sort(to.rm))
+```
+```{r}
+mycounts <- meancounts[-to.rm,]
+head(mycounts)
+```
+```{r}
+nrow(mycounts)
+```
+
+```{r}
+library(DESeq2)
+citation("DESeq2")
+```
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData=counts, 
+                              colData=metadata, 
+                              design=~dex)
+dds
+```
+
+```{r}
+dds <- DESeq(dds)
+```
+
+```{r}
+res <- results(dds)
+res
+```
+
+VOLCANO PLOTSSSSS 
+```{r}
+plot(res$log2FoldChange, res$padj)
+```
+
+That was not a usefall plot because al the small p-values are hidden at the bottom of the plot and we can't see them very well. Log can help
+
+```{r}
+plot(res$log2FoldChange, log(res$padj))
+```
+We can flip this p-value axis by putting a minus sign on it, giving us a classic volcano plot.
+
+```{r}
+plot(res$log2FoldChange, -log(res$padj))
+```
+
+
+Let's make our plot pretty by adding color to draw attention to the genes we care about- the points with large fold-change and small p-values (high -log values)
+
+```{r}
+plot(res$log2FoldChange, -log(res$padj))
+abline(v=c(-2, +2), col= "gray")
+abline(h=-log(0.05), col="gray")
+```
+
+```{r}
+mycols <- rep("gray", nrow(res))
+mycols[abs(res$log2FoldChange)>2] <- "red"
+mycols[res$padj>0.05] <- "gray"
+```
+
+```{r}
+plot(res$log2FoldChange, -log(res$padj), col=mycols)
+abline(v=c(-2, +2), col= "gray")
+abline(h=-log(0.05), col="gray")
+```
+
